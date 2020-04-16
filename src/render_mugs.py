@@ -331,6 +331,19 @@ def upload_mug_to_s3(slogan):
     return slogan_with_mug_urls
 
 
+def clean_out_img_buffer(slogan):
+    keys_to_delete = [
+        "left_mug",
+        "right_mug",
+        "microwave_mug",
+        "size_example"
+    ]
+    for key in keys_to_delete:
+        del slogan[key]
+
+    return slogan
+
+
 def create_amazon_upload_file(uploaded_mugs_dicts):
     print("Format dict for csv printing")
     formatted_dicts = []
@@ -1040,14 +1053,28 @@ if __name__ == "__main__":
     input_file = args.input_file
     with open(input_file, encoding="utf-8-sig") as csv_file:
         reader = csv.DictReader(csv_file)
-        slogan_dicts = [row for row in reader][:1]
+        slogan_dicts = [row for row in reader]
 
     valid_slogans = validate_input(slogan_dicts)
 
     print("Render and upload mugs")
-    uploaded_mugs = []  # list of dicts including mug urls
+    amazon_ready_slogans = []  # list of dicts including mug urls
     for slogan in progressbar(valid_slogans):
-        rendered_slogan = render_mug(slogan)
-        uploaded_mug = upload_mug_to_s3(rendered_slogan)
-        uploaded_mugs.append(uploaded_mug)
-    create_amazon_upload_file(uploaded_mugs)
+        try:
+            rendered_slogan = render_mug(slogan)
+            uploaded_slogan = upload_mug_to_s3(rendered_slogan)
+            slogan_without_img_files = clean_out_img_buffer(uploaded_slogan)
+
+            amazon_ready_slogan = {
+                "item_name": uploaded_slogan["item_name"],
+                "keywords": uploaded_slogan["keywords"],
+                "left_mug_url": uploaded_slogan["left_mug_url"],
+                "right_mug_url": uploaded_slogan["right_mug_url"],
+                "microwave_mug_url": uploaded_slogan["microwave_mug_url"],
+                "size_example_url": uploaded_slogan["size_example_url"]
+            }
+            amazon_ready_slogans.append(amazon_ready_slogan)
+        except Exception as e:
+            logging.error(e)
+            continue
+    create_amazon_upload_file(amazon_ready_slogans)
